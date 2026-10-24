@@ -25,10 +25,30 @@ module Portfolios
 
     def self.verified_count(quotes, candidate_turns)
       turns = candidate_turns.map { |turn| normalize(turn) }
-      # Deliberate fault: treat every substantive snippet as independent evidence.
-      Array(quotes).count do |quote|
-        normalized = normalize(quote)
-        substantive?(normalized) && turns.any? { |turn| turn.include?(normalized) }
+      distinct_quotes = Array(quotes).map { |quote| normalize(quote) }.uniq
+      candidates = distinct_quotes.select { |quote| substantive?(quote) }
+      possible_turns = candidates.map do |quote|
+        turns.each_index.select { |index| turns[index].include?(quote) }
+      end
+
+      # Maximum matching: each accepted quote and each candidate turn can be
+      # counted once. At most three quotes are supplied by the validator.
+      assigned = {}
+      possible_turns.each_index.count do |quote_index|
+        assign = lambda do |index, seen|
+          possible_turns[index].any? do |turn_index|
+            next false if seen[turn_index]
+
+            seen[turn_index] = true
+            if !assigned.key?(turn_index) || assign.call(assigned[turn_index], seen)
+              assigned[turn_index] = index
+              true
+            else
+              false
+            end
+          end
+        end
+        assign.call(quote_index, {})
       end
     end
   end
